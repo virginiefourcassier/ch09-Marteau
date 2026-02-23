@@ -1,5 +1,6 @@
 const g = 9.81;
 console.log("JS chargé");
+
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
 const hctx = hammerCanvas.getContext("2d");
@@ -42,7 +43,12 @@ function drawHammerScene() {
 
   // manche
   hctx.fillStyle = "#ffcc33";
-  hctx.fillRect(0, -hammer.handleThickness / 2, hammer.handleLength, hammer.handleThickness);
+  hctx.fillRect(
+    0,
+    -hammer.handleThickness / 2,
+    hammer.handleLength,
+    hammer.handleThickness
+  );
 
   // tête
   hctx.fillStyle = "#999999";
@@ -218,12 +224,13 @@ function drawTrajectoryVisual() {
 
 // --- navigation ---
 btnTrajectoire.addEventListener("click", () => {
-  trajectoryScreen.classList.remove("hidden");
+  console.log("clic trajectoire");
+  trajectoryScreen.style.display = "flex";
   drawTrajectoryVisual();
 });
 
 btnRetour.addEventListener("click", () => {
-  trajectoryScreen.classList.add("hidden");
+  trajectoryScreen.style.display = "none";
 });
 
 btnQuitter.addEventListener("click", () => {
