@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (version CG)");
+console.log("JS chargé (version simplifiée)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -8,6 +8,7 @@ const hctx = hammerCanvas.getContext("2d");
 // UI
 const rotationSelect = document.getElementById("rotation");
 const speedSelect = document.getElementById("speed");
+const pointPosSelect = document.getElementById("pointPos");
 const btnTrajectoire = document.getElementById("btnTrajectoire");
 const btnQuitter = document.getElementById("btnQuitter");
 
@@ -27,12 +28,11 @@ const hammer = {
   headHeight: 120
 };
 
-// on fixe le centre de gravité approximatif au milieu de la tête + 1/3 du manche
-const cgOffset = 0.3; // 0 = pivot, 1 = extrémité du manche
+// centre de gravité approximatif à 30 % du manche depuis le pivot
+const cgOffset = 0.3;
 
-// point rouge (0..1 sur le manche)
+// point rouge (t = 0..1 sur le manche)
 let pointT = 1;
-let draggingPoint = false;
 
 // --- dessin marteau à l'écran principal ---
 function drawHammerScene() {
@@ -75,118 +75,76 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-function canvasToLocalHandle(x, y) {
-  const rect = hammerCanvas.getBoundingClientRect();
-  const mx = x - rect.left;
-  const my = y - rect.top;
-
-  const pivotX = hammer.x;
-  const pivotY = hammer.y;
-
-  const localX = mx - pivotX;
-  const localY = my - pivotY;
-
-  return { localX, localY };
+// mettre pointT en fonction du choix de l'élève
+function updatePointTFromSelect() {
+  const val = pointPosSelect.value;
+  if (val === "cg") {
+    pointT = cgOffset; // autour du centre de gravité
+  } else if (val === "middle") {
+    pointT = 0.5;
+  } else {
+    // "end"
+    pointT = 1.0;
+  }
+  drawHammerScene();
 }
 
-function updatePointFromMouse(evt) {
-  const { localX, localY } = canvasToLocalHandle(evt.clientX, evt.clientY);
-
-  if (Math.abs(localY) < hammer.handleThickness * 2) {
-    let t = localX / hammer.handleLength;
-    t = Math.max(0, Math.min(1, t));
-    pointT = t;
-    drawHammerScene();
-  }
-}
-
-hammerCanvas.addEventListener("mousedown", (evt) => {
-  draggingPoint = true;
-  updatePointFromMouse(evt);
-});
-
-window.addEventListener("mousemove", (evt) => {
-  if (draggingPoint) {
-    updatePointFromMouse(evt);
-  }
-});
-
-window.addEventListener("mouseup", () => {
-  draggingPoint = false;
-});
-
-// --- trajectoire réaliste visuelle : CG + rotation autour ---
-// 1. trajectoire du centre de gravité = parabole
-// 2. point rouge = CG + rotation autour d'un rayon R
-
+// --- trajectoire : centre de gravité en parabole + rotation ---
 function computeTrajectoryCG() {
-  const speed = parseFloat(speedSelect.value);      // 2..10
-  const rotFactor = parseFloat(rotationSelect.value); // 1..10
+  const speed = parseFloat(speedSelect.value); // 5 ou 10
+  const rotFactor = parseFloat(rotationSelect.value); // 1 ou 10
 
-  // position initiale au pivot
   const pivotX = hammer.x;
   const pivotY = hammer.y;
 
-  // centre de gravité approximatif sur le manche
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  // vitesse initiale du centre de gravité (projectile)
-  const launchAngle = Math.PI / 3; // 60°
-  const v0 = speed * 40;           // échelle visuelle
+  // parabole pour le centre de gravité
+  const launchAngle = Math.PI * 0.6; // 108°, pour ressembler à ton SWF
+  const v0 = speed * 40;
 
   const dt = 0.03;
   const points = [];
 
   let t = 0;
-  while (t < 4) {
+  while (t < 4.5) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
-      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 3 * t * t); // parabole
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 3 * t * t);
 
-    if (yCG > trajectoryCanvas.height + 100) break;
+    if (yCG > trajectoryCanvas.height + 120) break;
 
-    // distance du point rouge au centre de gravité (en pixels)
-    const R =
-      Math.abs(pointT - cgOffset) * hammer.handleLength; // 0 si point sur CG
+    const R = Math.abs(pointT - cgOffset) * hammer.handleLength;
 
-    // vitesse angulaire : plus rotFactor est grand, plus ça tourne
-    const omega = rotFactor * 5; // rad/s (échelle visuelle)
-
-    // angle de rotation au temps t
+    const omega = rotFactor * 5;
     const theta = omega * t;
 
-    // vecteur du CG vers le point rouge à t=0 (on suppose aligné sur le manche)
     const dx0 = (pointT - cgOffset) * hammer.handleLength;
     const dy0 = 0;
 
-    // rotation de ce vecteur de theta autour du CG
     const dx = dx0 * Math.cos(theta) - dy0 * Math.sin(theta);
     const dy = dx0 * Math.sin(theta) + dy0 * Math.cos(theta);
 
     const xP = xCG + dx;
     const yP = yCG + dy;
 
-    points.push({
-      xCG,
-      yCG,
-      xP,
-      yP,
-      t
-    });
-
+    points.push({ xCG, yCG, xP, yP });
     t += dt;
   }
 
-  return { cgX0, cgY0, points };
+  return { points };
 }
 
 // --- dessin sur le grand canvas ---
 function drawTrajectoryVisual() {
   const { points } = computeTrajectoryCG();
+  if (points.length === 0) return;
+
+  const first = points[0];
 
   const offsetX = trajectoryCanvas.width * 0.05;
-  const baselineY = trajectoryCanvas.height * 0.8;
+  const baselineY = trajectoryCanvas.height * 0.85;
   const scale = 0.7;
 
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
@@ -198,21 +156,19 @@ function drawTrajectoryVisual() {
   for (let i = 0; i < n; i++) {
     const p = points[i];
 
-    // position du CG pour placer le marteau
-    const hx = offsetX + (p.xCG - points[0].xCG) * scale;
-    const hy = baselineY + (p.yCG - points[0].yCG) * scale;
+    const hx = offsetX + (p.xCG - first.xCG) * scale;
+    const hy = baselineY + (p.yCG - first.yCG) * scale;
 
     const progress = i / n;
 
-    // angle de rotation déduit du point rouge par rapport au CG
     const dx = p.xP - p.xCG;
     const dy = p.yP - p.yCG;
-    const angle = Math.atan2(dy, dx); // orientation du manche
+    const angle = Math.atan2(dy, dx);
 
     const alphaGhost = 0.05 + 0.25 * progress;
     const alphaHandle = 0.15 + 0.6 * progress;
 
-    // ombre gris clair
+    // ombre gris clair du marteau
     tctx.save();
     tctx.translate(hx, hy);
     tctx.rotate(angle);
@@ -260,8 +216,8 @@ function drawTrajectoryVisual() {
     tctx.restore();
 
     // point rouge
-    const xPoint = offsetX + (p.xP - points[0].xCG) * scale;
-    const yPoint = baselineY + (p.yP - points[0].yCG) * scale;
+    const xPoint = offsetX + (p.xP - first.xCG) * scale;
+    const yPoint = baselineY + (p.yP - first.yCG) * scale;
 
     tctx.beginPath();
     tctx.fillStyle = `rgba(255,0,0,${0.4 + 0.5 * progress})`;
@@ -285,5 +241,8 @@ btnQuitter.addEventListener("click", () => {
   window.location.reload();
 });
 
+// réagit au changement de position du point
+pointPosSelect.addEventListener("change", updatePointTFromSelect);
+
 // dessin initial
-drawHammerScene();
+updatePointTFromSelect();
