@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (rotation réduite + parabole complète)");
+console.log("JS chargé (parabole complète corrigée)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -18,7 +18,7 @@ const trajectoryCanvas = document.getElementById("trajectoryCanvas");
 const tctx = trajectoryCanvas.getContext("2d");
 const btnRetour = document.getElementById("btnRetour");
 
-// géométrie du marteau (dans le canvas vert)
+// géométrie du marteau
 const hammer = {
   x: hammerCanvas.width * 0.25,
   y: hammerCanvas.height * 0.6,
@@ -28,13 +28,11 @@ const hammer = {
   headHeight: 120
 };
 
-// centre de gravité approximatif à 30 % du manche depuis le pivot
+// centre de gravité approximatif
 const cgOffset = 0.3;
-
-// le point rouge est le centre de gravité
 let pointT = cgOffset;
 
-// --- dessin marteau sur l'écran principal ---
+// --- marteau écran principal ---
 function drawHammerScene() {
   hctx.clearRect(0, 0, hammerCanvas.width, hammerCanvas.height);
 
@@ -44,7 +42,6 @@ function drawHammerScene() {
   hctx.save();
   hctx.translate(pivotX, pivotY);
 
-  // manche
   hctx.fillStyle = "#ffcc33";
   hctx.fillRect(
     0,
@@ -53,7 +50,6 @@ function drawHammerScene() {
     hammer.handleThickness
   );
 
-  // tête
   hctx.fillStyle = "#999999";
   hctx.beginPath();
   hctx.moveTo(-hammer.headWidth, -hammer.headHeight / 2);
@@ -64,7 +60,6 @@ function drawHammerScene() {
   hctx.closePath();
   hctx.fill();
 
-  // point rouge au centre de gravité
   const px = cgOffset * hammer.handleLength;
   const py = 0;
   hctx.fillStyle = "red";
@@ -75,13 +70,13 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-function updatePointTFromSelect() {
+function initPoint() {
   pointT = cgOffset;
   pointPosSelect.value = "cg";
   drawHammerScene();
 }
 
-// --- trajectoire du centre de gravité (parabole complète) ---
+// --- trajectoire complète du centre de gravité ---
 function computeTrajectoryCG() {
   const speed = parseFloat(speedSelect.value);      // 5 ou 10
   const rotFactor = parseFloat(rotationSelect.value); // 1 ou 10
@@ -92,24 +87,24 @@ function computeTrajectoryCG() {
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  // lancer vers le haut, angle plus modéré pour allonger la parabole
-  const launchAngle = Math.PI * 0.6; // 108°
-  const v0 = speed * 32;             // un peu moins vertical
+  // angle pas trop vertical pour une grande parabole visible
+  const launchAngle = Math.PI * 0.55;  // ~99°
+  const v0 = speed * 30;
 
   const dt = 0.03;
   const points = [];
 
   let t = 0;
-  while (t < 5.2) {
+  while (t < 6) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
-      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 2.5 * t * t);
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 2.3 * t * t);
 
-    if (yCG > cgY0 + 220) break; // on s'arrête quand ça retombe assez bas
+    // on garde toute la montée + descente, tant que ce n'est pas trop bas
+    if (yCG > cgY0 + 260) break;
 
-    // rotation très limitée : dépend de rotFactor mais avec petit coefficient
-    const baseOmega = 0.8;          // rotation de base
-    const omega = baseOmega * (rotFactor / 10); // 0.08 à 0.8 rad/s
+    const baseOmega = 0.5;
+    const omega = baseOmega * (rotFactor / 10); // rotation très modérée
     const theta = omega * t;
 
     points.push({ xCG, yCG, theta });
@@ -119,20 +114,33 @@ function computeTrajectoryCG() {
   return { points };
 }
 
-// --- dessin sur le grand canvas ---
+// --- dessin sur le grand canvas (centré sur toute la courbe) ---
 function drawTrajectoryVisual() {
   const { points } = computeTrajectoryCG();
   if (points.length === 0) return;
 
-  const first = points[0];
+  // on calcule min/max pour adapter le cadrage
+  let minX = points[0].xCG;
+  let maxX = points[0].xCG;
+  let minY = points[0].yCG;
+  let maxY = points[0].yCG;
 
-  // décalage et zoom pour voir la parabole entière
-  const offsetX = trajectoryCanvas.width * 0.15;  // décale à droite
-  const baselineY = trajectoryCanvas.height * 0.75; // parabole plus centrée
-  const scale = 0.9;                               // un peu plus grand
+  for (const p of points) {
+    if (p.xCG < minX) minX = p.xCG;
+    if (p.xCG > maxX) maxX = p.xCG;
+    if (p.yCG < minY) minY = p.yCG;
+    if (p.yCG > maxY) maxY = p.yCG;
+  }
+
+  const margin = 40;
+  const widthWorld = maxX - minX || 1;
+  const heightWorld = maxY - minY || 1;
+
+  const scaleX = (trajectoryCanvas.width - 2 * margin) / widthWorld;
+  const scaleY = (trajectoryCanvas.height - 2 * margin) / heightWorld;
+  const scale = Math.min(scaleX, scaleY); // pour que tout tienne
 
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
-
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
@@ -140,13 +148,15 @@ function drawTrajectoryVisual() {
   for (let i = 0; i < n; i++) {
     const p = points[i];
 
-    const cgx = offsetX + (p.xCG - first.xCG) * scale;
-    const cgy = baselineY + (p.yCG - first.yCG) * scale;
+    // centre de gravité transformé dans le canvas
+    const cgx =
+      margin + (p.xCG - minX) * scale;
+    const cgy =
+      margin + (p.yCG - minY) * scale;
 
     const progress = i / n;
     const angle = p.theta;
 
-    // transparence douce
     const alphaGhost = 0.03 + 0.22 * progress;
     const alphaHandle = 0.10 + 0.55 * progress;
 
@@ -209,7 +219,7 @@ btnQuitter.addEventListener("click", () => {
   window.location.reload();
 });
 
-// on force la position sur "centre de gravité"
+// on force la position sur le centre de gravité
 pointPosSelect.value = "cg";
 pointPosSelect.disabled = true;
-updatePointTFromSelect();
+initPoint();
