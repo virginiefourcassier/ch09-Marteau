@@ -1,5 +1,4 @@
-// ----- paramètres généraux -----
-const g = 9.81; // gravité
+const g = 9.81;
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -17,7 +16,7 @@ const trajectoryCanvas = document.getElementById("trajectoryCanvas");
 const tctx = trajectoryCanvas.getContext("2d");
 const btnRetour = document.getElementById("btnRetour");
 
-// géométrie du marteau (en pixels, dans le canvas vert)
+// géométrie du marteau (dans le canvas vert)
 const hammer = {
   x: hammerCanvas.width * 0.25,
   y: hammerCanvas.height * 0.6,
@@ -27,15 +26,14 @@ const hammer = {
   headHeight: 120
 };
 
-// point rouge (fraction de la longueur du manche)
-let pointT = 1; // 0 = base manche, 1 = extrémité
+// point rouge (0..1 sur le manche)
+let pointT = 1;
 let draggingPoint = false;
 
-// ----- dessin du marteau -----
+// --- dessin marteau à l'écran principal ---
 function drawHammerScene() {
   hctx.clearRect(0, 0, hammerCanvas.width, hammerCanvas.height);
 
-  // marteau : on place le pivot à gauche du manche
   const pivotX = hammer.x;
   const pivotY = hammer.y;
 
@@ -46,7 +44,7 @@ function drawHammerScene() {
   hctx.fillStyle = "#ffcc33";
   hctx.fillRect(0, -hammer.handleThickness / 2, hammer.handleLength, hammer.handleThickness);
 
-  // tête (à gauche du manche)
+  // tête
   hctx.fillStyle = "#999999";
   hctx.beginPath();
   hctx.moveTo(-hammer.headWidth, -hammer.headHeight / 2);
@@ -68,13 +66,11 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-// conversions souris → position le long du manche
 function canvasToLocalHandle(x, y) {
   const rect = hammerCanvas.getBoundingClientRect();
   const mx = x - rect.left;
   const my = y - rect.top;
 
-  // ici le marteau n'est pas encore tourné, donc on suppose manche horizontal
   const pivotX = hammer.x;
   const pivotY = hammer.y;
 
@@ -87,7 +83,6 @@ function canvasToLocalHandle(x, y) {
 function updatePointFromMouse(evt) {
   const { localX, localY } = canvasToLocalHandle(evt.clientX, evt.clientY);
 
-  // vérifier qu'on est proche du manche
   if (Math.abs(localY) < hammer.handleThickness * 2) {
     let t = localX / hammer.handleLength;
     t = Math.max(0, Math.min(1, t));
@@ -96,7 +91,6 @@ function updatePointFromMouse(evt) {
   }
 }
 
-// events souris pour déplacer le point rouge
 hammerCanvas.addEventListener("mousedown", (evt) => {
   draggingPoint = true;
   updatePointFromMouse(evt);
@@ -112,48 +106,47 @@ window.addEventListener("mouseup", () => {
   draggingPoint = false;
 });
 
-// ----- calcul de la trajectoire -----
-function computeTrajectory() {
-  const speed = parseFloat(speedSelect.value); // m/s (on va l'utiliser comme facteur)
-  const rotFactor = parseFloat(rotationSelect.value);
+// --- calcul simplifié pour la trajectoire ---
+function computeVisualTrajectory() {
+  const speed = parseFloat(speedSelect.value);   // 2..10
+  const rotFactor = parseFloat(rotationSelect.value); // 1..10
 
-  // position initiale du point choisi (en pixels, on s'en sert comme unités)
   const startX = hammer.x + pointT * hammer.handleLength;
   const startY = hammer.y;
 
-  // angle de lancer : par exemple 60° moins un terme lié au point
-  const baseAngle = Math.PI / 3;
-  const angle = baseAngle - (pointT - 0.5) * (Math.PI / 6) * rotFactor / 5;
+  // angle de base (en rad)
+  const baseAngle = Math.PI * 0.6; // ~108°
+  // plus le point est excentré, plus l’angle varie avec rotFactor
+  const angleOffset = (pointT - 0.5) * (Math.PI / 3) * (rotFactor / 10);
+  const angle = baseAngle - angleOffset;
 
-  const v0 = speed * 20; // facteur arbitraire pour que ça remplisse l'écran
+  const v0 = 25 * speed; // juste pour remplir l’écran
 
-  const dt = 0.03;
+  const dt = 0.04;
   const points = [];
-
   let t = 0;
-  let x = startX;
-  let y = startY;
+
   while (t < 4) {
-    x = startX + v0 * Math.cos(angle) * t;
-    y = startY - (v0 * Math.sin(angle) * t - 0.5 * g * (30 / 9.81) * t * t); // échelle verticale
+    const x = startX + v0 * Math.cos(angle) * t;
+    const y =
+      startY -
+      (v0 * Math.sin(angle) * t - 0.5 * g * 2 * t * t); // échelle verticale “visuelle”
 
     if (y > trajectoryCanvas.height + 100) break;
-
-    points.push({ x, y });
+    points.push({ x, y, t });
     t += dt;
   }
 
   return { startX, startY, points };
 }
 
-// ----- affichage de la trajectoire -----
-function drawTrajectory() {
-  const { startX, startY, points } = computeTrajectory();
+// --- dessin style SWF sur le grand canvas ---
+function drawTrajectoryVisual() {
+  const { startX, startY, points } = computeVisualTrajectory();
 
-  // adapter les coordonnées à la taille du canvas de trajectoire
-  const offsetX = trajectoryCanvas.width * 0.1;
-  const offsetY = trajectoryCanvas.height * 0.7;
-  const scale = 0.8; // mise à l'échelle
+  const offsetX = trajectoryCanvas.width * 0.05;
+  const baselineY = trajectoryCanvas.height * 0.8;
+  const scale = 0.8;
 
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
@@ -161,58 +154,16 @@ function drawTrajectory() {
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  // dessin de multiples positions du marteau (effet "fane" comme ton SWF)
   const n = points.length;
-  for (let i = 0; i < n; i += 2) {
+  for (let i = 0; i < n; i++) {
     const p = points[i];
 
-    const alpha = 0.05 + 0.6 * (i / n);
     const hx = offsetX + (p.x - startX) * scale;
-    const hy = offsetY + (p.y - startY) * scale;
+    const hy = baselineY + (p.y - startY) * scale;
 
-    tctx.save();
-    tctx.translate(hx, hy);
-    tctx.rotate(-0.6 * (i / n)); // rotation progressive
+    const progress = i / n;
 
-    // manche
-    tctx.fillStyle = `rgba(255, 204, 51, ${alpha})`;
-    tctx.fillRect(
-      -hammer.handleLength * 0.1,
-      -hammer.handleThickness / 2,
-      hammer.handleLength * 0.6,
-      hammer.handleThickness
-    );
+    const alphaHandle = 0.1 + 0.5 * progress;
+    const alphaGhost = 0.08 + 0.3 * progress;
 
-    // point rouge
-    tctx.beginPath();
-    tctx.fillStyle = `rgba(255, 0, 0, ${Math.min(1, alpha + 0.2)})`;
-    tctx.arc(
-      -hammer.handleLength * 0.1 + pointT * hammer.handleLength * 0.6,
-      0,
-      6,
-      0,
-      Math.PI * 2
-    );
-    tctx.fill();
-
-    tctx.restore();
-  }
-}
-
-// ----- navigation -----
-btnTrajectoire.addEventListener("click", () => {
-  trajectoryScreen.classList.remove("hidden");
-  drawTrajectory();
-});
-
-btnRetour.addEventListener("click", () => {
-  trajectoryScreen.classList.add("hidden");
-});
-
-btnQuitter.addEventListener("click", () => {
-  // pour l'instant: simple refresh
-  window.location.reload();
-});
-
-// dessin initial
-drawHammerScene();
+    // "ombre" du marteau (gris clair transparent)
