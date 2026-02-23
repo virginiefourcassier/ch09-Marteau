@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>La trajectoire d'un marteau en mouvement</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <h1>La trajectoire d'un marteau en mouvement</h1>
+
+    <div class="main-layout">
+      <div class="left-panel">
+        <p>
+          Grâce à cette animation, tu vas pouvoir observer la trajectoire de
+          différents points d'un marteau en mouvement.
+        </p>
+        <p>
+          Il est possible de modifier la manière dont le marteau est lancé.
+          Pour cela, tu peux choisir une valeur "rotation" et une valeur "vitesse".
+        </p>
+        <p>
+          Si tu trouves la position du centre de gravité du marteau, tu
+          obtiendras une trajectoire parfaitement parabolique.
+        </p>
+      </div>
+
+      <div class="center-panel">
+        <canvas id="hammerCanvas" width="640" height="360"></canvas>
+      </div>
+
+      <div class="right-panel">
+        <button id="btnTrajectoire" class="big-button">Obtenir la trajectoire</button>
+
+        <div class="control-block">
+          <label for="rotation">Importance des rotations</label>
+          <select id="rotation">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+
+        <div class="control-block">
+          <label for="speed">Vitesse du marteau en m/s</label>
+          <select id="speed">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+
+        <button id="btnQuitter" class="small-button">Quitter</button>
+      </div>
+    </div>
+
+    <div class="bottom-panel">
+      <p>Déplace le point rouge sur une partie du marteau puis clique sur "Obtenir la trajectoire"</p>
+    </div>
+  </div>
+
+  <!-- Écran trajectoire plein (optionnel) -->
+  <div id="trajectoryScreen" class="hidden">
+    <canvas id="trajectoryCanvas" width="1024" height="576"></canvas>
+    <button id="btnRetour" class="back-button">Retour</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
