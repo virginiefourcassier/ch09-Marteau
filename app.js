@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé");
+console.log("JS chargé (version CG)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -26,6 +26,9 @@ const hammer = {
   headWidth: 80,
   headHeight: 120
 };
+
+// on fixe le centre de gravité approximatif au milieu de la tête + 1/3 du manche
+const cgOffset = 0.3; // 0 = pivot, 1 = extrémité du manche
 
 // point rouge (0..1 sur le manche)
 let pointT = 1;
@@ -112,43 +115,79 @@ window.addEventListener("mouseup", () => {
   draggingPoint = false;
 });
 
-// --- calcul simplifié pour la trajectoire ---
-function computeVisualTrajectory() {
-  const speed = parseFloat(speedSelect.value);   // 2..10
+// --- trajectoire réaliste visuelle : CG + rotation autour ---
+// 1. trajectoire du centre de gravité = parabole
+// 2. point rouge = CG + rotation autour d'un rayon R
+
+function computeTrajectoryCG() {
+  const speed = parseFloat(speedSelect.value);      // 2..10
   const rotFactor = parseFloat(rotationSelect.value); // 1..10
 
-  const startX = hammer.x + pointT * hammer.handleLength;
-  const startY = hammer.y;
+  // position initiale au pivot
+  const pivotX = hammer.x;
+  const pivotY = hammer.y;
 
-  const baseAngle = Math.PI * 0.6;
-  const angleOffset = (pointT - 0.5) * (Math.PI / 3) * (rotFactor / 10);
-  const angle = baseAngle - angleOffset;
+  // centre de gravité approximatif sur le manche
+  const cgX0 = pivotX + cgOffset * hammer.handleLength;
+  const cgY0 = pivotY;
 
-  const v0 = 25 * speed;
+  // vitesse initiale du centre de gravité (projectile)
+  const launchAngle = Math.PI / 3; // 60°
+  const v0 = speed * 40;           // échelle visuelle
 
-  const dt = 0.04;
+  const dt = 0.03;
   const points = [];
+
   let t = 0;
-
   while (t < 4) {
-    const x = startX + v0 * Math.cos(angle) * t;
-    const y = startY - (v0 * Math.sin(angle) * t - 0.5 * g * 2 * t * t);
+    const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
+    const yCG =
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 3 * t * t); // parabole
 
-    if (y > trajectoryCanvas.height + 100) break;
-    points.push({ x, y });
+    if (yCG > trajectoryCanvas.height + 100) break;
+
+    // distance du point rouge au centre de gravité (en pixels)
+    const R =
+      Math.abs(pointT - cgOffset) * hammer.handleLength; // 0 si point sur CG
+
+    // vitesse angulaire : plus rotFactor est grand, plus ça tourne
+    const omega = rotFactor * 5; // rad/s (échelle visuelle)
+
+    // angle de rotation au temps t
+    const theta = omega * t;
+
+    // vecteur du CG vers le point rouge à t=0 (on suppose aligné sur le manche)
+    const dx0 = (pointT - cgOffset) * hammer.handleLength;
+    const dy0 = 0;
+
+    // rotation de ce vecteur de theta autour du CG
+    const dx = dx0 * Math.cos(theta) - dy0 * Math.sin(theta);
+    const dy = dx0 * Math.sin(theta) + dy0 * Math.cos(theta);
+
+    const xP = xCG + dx;
+    const yP = yCG + dy;
+
+    points.push({
+      xCG,
+      yCG,
+      xP,
+      yP,
+      t
+    });
+
     t += dt;
   }
 
-  return { startX, startY, points };
+  return { cgX0, cgY0, points };
 }
 
-// --- dessin style SWF sur le grand canvas ---
+// --- dessin sur le grand canvas ---
 function drawTrajectoryVisual() {
-  const { startX, startY, points } = computeVisualTrajectory();
+  const { points } = computeTrajectoryCG();
 
   const offsetX = trajectoryCanvas.width * 0.05;
   const baselineY = trajectoryCanvas.height * 0.8;
-  const scale = 0.8;
+  const scale = 0.7;
 
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
@@ -159,34 +198,49 @@ function drawTrajectoryVisual() {
   for (let i = 0; i < n; i++) {
     const p = points[i];
 
-    const hx = offsetX + (p.x - startX) * scale;
-    const hy = baselineY + (p.y - startY) * scale;
+    // position du CG pour placer le marteau
+    const hx = offsetX + (p.xCG - points[0].xCG) * scale;
+    const hy = baselineY + (p.yCG - points[0].yCG) * scale;
 
     const progress = i / n;
 
-    const alphaHandle = 0.1 + 0.5 * progress;
-    const alphaGhost = 0.08 + 0.3 * progress;
+    // angle de rotation déduit du point rouge par rapport au CG
+    const dx = p.xP - p.xCG;
+    const dy = p.yP - p.yCG;
+    const angle = Math.atan2(dy, dx); // orientation du manche
+
+    const alphaGhost = 0.05 + 0.25 * progress;
+    const alphaHandle = 0.15 + 0.6 * progress;
 
     // ombre gris clair
     tctx.save();
     tctx.translate(hx, hy);
-    tctx.rotate(-2.5 * progress);
+    tctx.rotate(angle);
 
-    tctx.fillStyle = `rgba(150, 150, 150, ${alphaGhost})`;
+    tctx.fillStyle = `rgba(150,150,150,${alphaGhost})`;
     tctx.fillRect(
-      -hammer.handleLength * 0.15,
+      -hammer.handleLength * cgOffset,
       -hammer.handleThickness / 2,
-      hammer.handleLength * 0.7,
+      hammer.handleLength,
       hammer.handleThickness
     );
 
     tctx.beginPath();
-    tctx.fillStyle = `rgba(150, 150, 150, ${alphaGhost})`;
-    tctx.moveTo(-hammer.headWidth * 0.7, -hammer.headHeight * 0.45);
-    tctx.lineTo(0, -hammer.headHeight * 0.45);
-    tctx.lineTo(0, hammer.headHeight * 0.45);
-    tctx.lineTo(-hammer.headWidth * 0.4, hammer.headHeight * 0.25);
-    tctx.lineTo(-hammer.headWidth * 0.7, hammer.headHeight * 0.45);
+    tctx.fillStyle = `rgba(150,150,150,${alphaGhost})`;
+    tctx.moveTo(
+      -hammer.handleLength * cgOffset - hammer.headWidth,
+      -hammer.headHeight * 0.45
+    );
+    tctx.lineTo(-hammer.handleLength * cgOffset, -hammer.headHeight * 0.45);
+    tctx.lineTo(-hammer.handleLength * cgOffset, hammer.headHeight * 0.45);
+    tctx.lineTo(
+      -hammer.handleLength * cgOffset - hammer.headWidth * 0.6,
+      hammer.headHeight * 0.25
+    );
+    tctx.lineTo(
+      -hammer.handleLength * cgOffset - hammer.headWidth,
+      hammer.headHeight * 0.45
+    );
     tctx.closePath();
     tctx.fill();
 
@@ -195,29 +249,23 @@ function drawTrajectoryVisual() {
     // manche doré
     tctx.save();
     tctx.translate(hx, hy);
-    tctx.rotate(-2.5 * progress);
-    tctx.fillStyle = `rgba(255, 204, 51, ${alphaHandle})`;
+    tctx.rotate(angle);
+    tctx.fillStyle = `rgba(255,204,51,${alphaHandle})`;
     tctx.fillRect(
-      -hammer.handleLength * 0.15,
+      -hammer.handleLength * cgOffset,
       -hammer.handleThickness / 2,
-      hammer.handleLength * 0.7,
+      hammer.handleLength,
       hammer.handleThickness
     );
     tctx.restore();
 
     // point rouge
-    const pointX =
-      hx +
-      Math.cos(-2.5 * progress) *
-        (pointT * hammer.handleLength * 0.7 - hammer.handleLength * 0.15);
-    const pointY =
-      hy +
-      Math.sin(-2.5 * progress) *
-        (pointT * hammer.handleLength * 0.7 - hammer.handleLength * 0.15);
+    const xPoint = offsetX + (p.xP - points[0].xCG) * scale;
+    const yPoint = baselineY + (p.yP - points[0].yCG) * scale;
 
     tctx.beginPath();
-    tctx.fillStyle = `rgba(255, 0, 0, ${0.4 + 0.5 * progress})`;
-    tctx.arc(pointX, pointY, 7, 0, Math.PI * 2);
+    tctx.fillStyle = `rgba(255,0,0,${0.4 + 0.5 * progress})`;
+    tctx.arc(xPoint, yPoint, 6, 0, Math.PI * 2);
     tctx.fill();
   }
 }
