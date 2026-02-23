@@ -1,5 +1,5 @@
 const g = 9.81;
-
+console.log("JS chargé");
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
 const hctx = hammerCanvas.getContext("2d");
