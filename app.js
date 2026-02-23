@@ -114,13 +114,11 @@ function computeVisualTrajectory() {
   const startX = hammer.x + pointT * hammer.handleLength;
   const startY = hammer.y;
 
-  // angle de base (en rad)
-  const baseAngle = Math.PI * 0.6; // ~108°
-  // plus le point est excentré, plus l’angle varie avec rotFactor
+  const baseAngle = Math.PI * 0.6;
   const angleOffset = (pointT - 0.5) * (Math.PI / 3) * (rotFactor / 10);
   const angle = baseAngle - angleOffset;
 
-  const v0 = 25 * speed; // juste pour remplir l’écran
+  const v0 = 25 * speed;
 
   const dt = 0.04;
   const points = [];
@@ -128,12 +126,10 @@ function computeVisualTrajectory() {
 
   while (t < 4) {
     const x = startX + v0 * Math.cos(angle) * t;
-    const y =
-      startY -
-      (v0 * Math.sin(angle) * t - 0.5 * g * 2 * t * t); // échelle verticale “visuelle”
+    const y = startY - (v0 * Math.sin(angle) * t - 0.5 * g * 2 * t * t);
 
     if (y > trajectoryCanvas.height + 100) break;
-    points.push({ x, y, t });
+    points.push({ x, y });
     t += dt;
   }
 
@@ -150,7 +146,6 @@ function drawTrajectoryVisual() {
 
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  // fond bleu
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
@@ -166,4 +161,74 @@ function drawTrajectoryVisual() {
     const alphaHandle = 0.1 + 0.5 * progress;
     const alphaGhost = 0.08 + 0.3 * progress;
 
-    // "ombre" du marteau (gris clair transparent)
+    // ombre gris clair
+    tctx.save();
+    tctx.translate(hx, hy);
+    tctx.rotate(-2.5 * progress);
+
+    tctx.fillStyle = `rgba(150, 150, 150, ${alphaGhost})`;
+    tctx.fillRect(
+      -hammer.handleLength * 0.15,
+      -hammer.handleThickness / 2,
+      hammer.handleLength * 0.7,
+      hammer.handleThickness
+    );
+
+    tctx.beginPath();
+    tctx.fillStyle = `rgba(150, 150, 150, ${alphaGhost})`;
+    tctx.moveTo(-hammer.headWidth * 0.7, -hammer.headHeight * 0.45);
+    tctx.lineTo(0, -hammer.headHeight * 0.45);
+    tctx.lineTo(0, hammer.headHeight * 0.45);
+    tctx.lineTo(-hammer.headWidth * 0.4, hammer.headHeight * 0.25);
+    tctx.lineTo(-hammer.headWidth * 0.7, hammer.headHeight * 0.45);
+    tctx.closePath();
+    tctx.fill();
+
+    tctx.restore();
+
+    // manche doré
+    tctx.save();
+    tctx.translate(hx, hy);
+    tctx.rotate(-2.5 * progress);
+    tctx.fillStyle = `rgba(255, 204, 51, ${alphaHandle})`;
+    tctx.fillRect(
+      -hammer.handleLength * 0.15,
+      -hammer.handleThickness / 2,
+      hammer.handleLength * 0.7,
+      hammer.handleThickness
+    );
+    tctx.restore();
+
+    // point rouge
+    const pointX =
+      hx +
+      Math.cos(-2.5 * progress) *
+        (pointT * hammer.handleLength * 0.7 - hammer.handleLength * 0.15);
+    const pointY =
+      hy +
+      Math.sin(-2.5 * progress) *
+        (pointT * hammer.handleLength * 0.7 - hammer.handleLength * 0.15);
+
+    tctx.beginPath();
+    tctx.fillStyle = `rgba(255, 0, 0, ${0.4 + 0.5 * progress})`;
+    tctx.arc(pointX, pointY, 7, 0, Math.PI * 2);
+    tctx.fill();
+  }
+}
+
+// --- navigation ---
+btnTrajectoire.addEventListener("click", () => {
+  trajectoryScreen.classList.remove("hidden");
+  drawTrajectoryVisual();
+});
+
+btnRetour.addEventListener("click", () => {
+  trajectoryScreen.classList.add("hidden");
+});
+
+btnQuitter.addEventListener("click", () => {
+  window.location.reload();
+});
+
+// dessin initial
+drawHammerScene();
