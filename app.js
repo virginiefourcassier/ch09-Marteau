@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (version animée complète)");
+console.log("JS chargé (parabole + boucles)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -29,15 +29,14 @@ const hammer = {
 };
 
 // centre de gravité plus proche de la tête
-// (à ~15 % de la longueur du manche depuis le pivot)
 const cgOffset = 0.15;
 
-// paramètres animation
+// animation
 let animationId = null;
 let trajectoryData = null;
 let currentIndex = 0;
 
-// t du point rouge sur le manche (0..1)
+// point rouge : t (0..1 sur le manche, <0 légèrement côté tête)
 let pointT = 1;
 
 // --- dessin marteau sur l'écran principal ---
@@ -70,7 +69,7 @@ function drawHammerScene() {
   hctx.closePath();
   hctx.fill();
 
-  // position du point rouge sur le manche (t en [0..1])
+  // point rouge
   const px = pointT * hammer.handleLength;
   const py = 0;
   hctx.fillStyle = "red";
@@ -81,24 +80,24 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-// met pointT selon le choix du select
+// mettre pointT selon le select
 function updatePointTFromSelect() {
   const val = pointPosSelect.value;
   if (val === "cg") {
-    pointT = cgOffset;
+    pointT = cgOffset;          // centre de gravité
+  } else if (val === "middle") {
+    pointT = 0.5;               // milieu du manche bien au centre
   } else if (val === "head") {
-    // point sur la tête : légèrement avant le pivot, côté tête
-    pointT = -hammer.headWidth / hammer.handleLength * 0.3;
+    pointT = -0.15;             // sur la tête, un peu avant le pivot
   } else {
-    // "end" : extrémité du manche
-    pointT = 1.0;
+    pointT = 1.0;               // extrémité du manche
   }
   drawHammerScene();
 }
 
-// --- calcul de la trajectoire globale (pré-calcul) ---
-// On calcule la trajectoire du centre de gravité, puis
-// la position du point rouge pour chaque instant.
+// --- calcul de la trajectoire globale ---
+//  - CG suit une parabole complète (montée + descente).
+//  - Point rouge = CG + rotation (faible si CG, forte sinon).
 
 function computeFullTrajectory() {
   const speed = parseFloat(speedSelect.value);      // 5 ou 10
@@ -107,7 +106,6 @@ function computeFullTrajectory() {
   const pivotX = hammer.x;
   const pivotY = hammer.y;
 
-  // position initiale du centre de gravité
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
@@ -115,32 +113,33 @@ function computeFullTrajectory() {
   const launchAngle = Math.PI * 0.7;
   const v0 = speed * 38;
 
-  const dt = 0.04; // moins de points -> traces moins denses
+  const dt = 0.05; // moins de points -> traces moins denses
   const raw = [];
 
   let t = 0;
-  while (t < 6) {
+  while (t < 7) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
       cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 2.0 * t * t);
 
-    // on coupe si c'est trop bas
-    if (yCG > cgY0 + 260) break;
+    // on garde montée + sommet + descente plus longue
+    if (yCG > cgY0 + 280) break;
 
-    // rotation de base
-    const baseOmega = 0.3; // rotation assez faible
+    // rotation :
+    // - si point au CG : rotation douce
+    // - sinon : rotation plus forte → boucles
+    const baseOmegaCG = 0.35;
+    const baseOmegaOther = 1.8;
+    const isCG = Math.abs(pointT - cgOffset) < 0.001;
+    const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
     const omega = baseOmega * (rotFactor / 10);
+
     const theta = omega * t;
 
-    // vecteur centre de gravité -> extrémité du manche (référence)
-    const dxHandle = (1 - cgOffset) * hammer.handleLength;
-    const dyHandle = 0;
-
-    // position du point rouge en coordonnées marteau
+    // point rouge en coordonnées marteau (distance au CG)
     const dxLocal = (pointT - cgOffset) * hammer.handleLength;
     const dyLocal = 0;
 
-    // appliquer rotation pour obtenir position réelle du point rouge
     const cosTh = Math.cos(theta);
     const sinTh = Math.sin(theta);
 
@@ -156,7 +155,7 @@ function computeFullTrajectory() {
 
   if (raw.length === 0) return null;
 
-  // calcul min/max pour cadrer la trajectoire complète
+  // cadrage : on utilise min/max de toute la trajectoire
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -176,7 +175,6 @@ function computeFullTrajectory() {
   const scaleY = (trajectoryCanvas.height - 2 * margin) / heightWorld;
   const scale = Math.min(scaleX, scaleY);
 
-  // on transforme en coordonnées canvas pour accélérer le dessin
   const points = raw.map((p) => {
     const cgx = margin + (p.xCG - minX) * scale;
     const cgy = margin + (p.yCG - minY) * scale;
@@ -190,13 +188,11 @@ function computeFullTrajectory() {
 
 // --- animation progressive ---
 function startAnimation() {
-  // arrêter une éventuelle animation précédente
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
   }
 
-  // recalcul de la trajectoire avec les paramètres courants
   trajectoryData = computeFullTrajectory();
   if (!trajectoryData) return;
 
@@ -218,13 +214,13 @@ function animateStep() {
     return;
   }
 
-  // dessiner la portion de trajectoire jusqu'à currentIndex
+  // fond
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  // on ne garde que une trace sur 2 pour limiter la superposition
-  const stepDraw = 2;
+  // on ne dessine qu'une position sur 3 pour limiter la superposition
+  const stepDraw = 3;
 
   for (let i = 0; i <= currentIndex; i += stepDraw) {
     const p = points[i];
@@ -279,7 +275,7 @@ function animateStep() {
     tctx.fill();
   }
 
-  // point rouge courant au premier plan sur sa trajectoire
+  // point rouge courant au premier plan
   const pCur = points[currentIndex];
   tctx.beginPath();
   tctx.fillStyle = "rgba(255,0,0,1)";
