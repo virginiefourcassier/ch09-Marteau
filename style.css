@@ -1,0 +1,134 @@
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", Arial, sans-serif;
+  background: #66a3ff; /* bleu de fond global */
+}
+
+#app {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding-top: 10px;
+}
+
+h1 {
+  text-align: center;
+  color: #ff3333;
+  font-size: 2.4rem;
+  margin-bottom: 10px;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1.6fr 1.1fr;
+  gap: 10px;
+  padding: 10px;
+  background: linear-gradient(#000, #444);
+  border-radius: 20px;
+  margin: 0 10px;
+}
+
+.left-panel {
+  color: white;
+  font-size: 0.9rem;
+}
+
+.left-panel p {
+  margin-bottom: 10px;
+}
+
+.center-panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#hammerCanvas {
+  background: #33dd55;
+  border-radius: 30px;
+}
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  color: #222;
+  font-size: 0.9rem;
+}
+
+.big-button {
+  padding: 10px;
+  border-radius: 10px;
+  border: 2px solid #444;
+  background: linear-gradient(#ff5555, #ffcc55);
+  color: #222;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.control-block {
+  padding: 10px;
+  border-radius: 10px;
+  background: linear-gradient(#ff66ff, #ffff66, #66ffff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-block label {
+  font-weight: bold;
+}
+
+.control-block select {
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.small-button {
+  margin-top: auto;
+  padding: 8px;
+  border-radius: 10px;
+  border: 2px solid #444;
+  background: #eee;
+  cursor: pointer;
+}
+
+.bottom-panel {
+  margin: 10px;
+  padding: 10px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #ff0066;
+  background: linear-gradient(#ff99ff, #ffff99);
+  border-radius: 20px;
+}
+
+/* Écran trajectoire */
+#trajectoryScreen {
+  position: fixed;
+  inset: 0;
+  background: #66a3ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+#trajectoryCanvas {
+  background: #66a3ff;
+}
+
+.back-button {
+  padding: 10px 30px;
+  font-size: 1.2rem;
+  border-radius: 20px;
+  border: 2px solid #444;
+  background: #eee;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none;
+}
