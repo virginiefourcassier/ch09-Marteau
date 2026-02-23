@@ -1,7 +1,7 @@
 body {
   margin: 0;
   font-family: "Trebuchet MS", Arial, sans-serif;
-  background: #66a3ff; /* bleu de fond global */
+  background: #66a3ff;
 }
 
 #app {
@@ -22,7 +22,7 @@ h1 {
   grid-template-columns: 1.1fr 1.6fr 1.1fr;
   gap: 10px;
   padding: 10px;
-  background: linear-gradient(#000, #444);
+  background: linear-gradient(#000000, #555555);
   border-radius: 20px;
   margin: 0 10px;
 }
@@ -89,7 +89,7 @@ h1 {
   padding: 8px;
   border-radius: 10px;
   border: 2px solid #444;
-  background: #eee;
+  background: #eeeeee;
   cursor: pointer;
 }
 
@@ -125,7 +125,7 @@ h1 {
   font-size: 1.2rem;
   border-radius: 20px;
   border: 2px solid #444;
-  background: #eee;
+  background: #eeeeee;
   cursor: pointer;
 }
 
