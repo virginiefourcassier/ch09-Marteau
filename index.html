@@ -33,33 +33,27 @@
         <button id="btnTrajectoire" class="big-button">Obtenir la trajectoire</button>
 
         <div class="control-block">
+          <label for="pointPos">Position du point rouge</label>
+          <select id="pointPos">
+            <option value="cg">Tête (centre de gravité)</option>
+            <option value="middle">Milieu du manche</option>
+            <option value="end" selected>Extrémité du manche</option>
+          </select>
+        </div>
+
+        <div class="control-block">
           <label for="rotation">Importance des rotations</label>
           <select id="rotation">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10</option>
+            <option value="1">1 (faible)</option>
+            <option value="10" selected>10 (forte)</option>
           </select>
         </div>
 
         <div class="control-block">
           <label for="speed">Vitesse du marteau en m/s</label>
           <select id="speed">
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10</option>
+            <option value="5" selected>5 (modérée)</option>
+            <option value="10">10 (rapide)</option>
           </select>
         </div>
 
@@ -68,11 +62,10 @@
     </div>
 
     <div class="bottom-panel">
-      <p>Déplace le point rouge sur une partie du marteau puis clique sur "Obtenir la trajectoire"</p>
+      <p>Choisis la position du point rouge puis clique sur "Obtenir la trajectoire"</p>
     </div>
   </div>
 
-  <!-- Écran trajectoire -->
   <div id="trajectoryScreen" class="hidden">
     <canvas id="trajectoryCanvas" width="1024" height="576"></canvas>
     <button id="btnRetour" class="back-button">Retour</button>
