@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (fix affichage marteau + bouton)");
+console.log("JS chargé (extrémité = cycloïde cohérente)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -18,7 +18,7 @@ const trajectoryCanvas = document.getElementById("trajectoryCanvas");
 const tctx = trajectoryCanvas.getContext("2d");
 const btnRetour = document.getElementById("btnRetour");
 
-// géométrie du marteau dans le canvas vert
+// géométrie du marteau
 const hammer = {
   x: hammerCanvas.width * 0.25,
   y: hammerCanvas.height * 0.7,
@@ -28,14 +28,15 @@ const hammer = {
   headHeight: 120
 };
 
-const cgOffset = 0.15; // centre de gravité proche de la tête
+// centre de gravité proche de la tête
+const cgOffset = 0.15;
 
 // animation
 let animationId = null;
 let trajectoryData = null;
 let currentIndex = 0;
 
-// point rouge (0..1 sur le manche, <0 côté tête)
+// t du point rouge sur le manche
 let pointT = 1;
 
 // ---------- DESSIN MARTEAU PAGE PRINCIPALE ----------
@@ -79,7 +80,6 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-// met pointT selon le select
 function updatePointTFromSelect() {
   const val = pointPosSelect.value;
   if (val === "cg") {
@@ -89,12 +89,13 @@ function updatePointTFromSelect() {
   } else if (val === "head") {
     pointT = -0.15;
   } else {
+    // extrémité du manche
     pointT = 1.0;
   }
   drawHammerScene();
 }
 
-// ---------- CALCUL TRAJECTOIRE (parabole CG + cycloïde éventuelle) ----------
+// ---------- CALCUL TRAJECTOIRE ----------
 function computeFullTrajectory() {
   const speed = parseFloat(speedSelect.value);
   const rotFactor = parseFloat(rotationSelect.value);
@@ -110,8 +111,8 @@ function computeFullTrajectory() {
 
   const dt = 0.06;
   const raw = [];
-
   let t = 0;
+
   while (t < 7) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
@@ -121,17 +122,18 @@ function computeFullTrajectory() {
 
     const isCG = Math.abs(pointT - cgOffset) < 0.001;
 
+    // position du point rouge
     let xP, yP;
 
     if (isCG) {
-      // trajectoire parabolique pure
+      // parabole pure
       xP = xCG;
       yP = yCG;
     } else {
       // cycloïde autour de la parabole
-      const R = Math.abs(pointT - cgOffset) * hammer.handleLength;
+      const R = Math.abs(pointT - cgOffset) * hammer.handleLength || 1;
       const vCycle = (5 + 10 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
-      const s = vCycle * t / (R || 1); // évite division par 0
+      const s = vCycle * t / R;
 
       const xCyc = R * (s - Math.sin(s));
       const yCyc = R * (1 - Math.cos(s));
@@ -146,19 +148,33 @@ function computeFullTrajectory() {
       yP = yCG + dy;
     }
 
-    const baseOmegaCG = 0.25;
-    const baseOmegaOther = 1.5;
-    const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
-    const omega = baseOmega * (rotFactor / 10);
-    const theta = omega * t;
+    // orientation du marteau :
+    // - si point = extrémité du manche, on oriente le manche pour que
+    //   l'extrémité coïncide avec le point rouge (cycloïde).
+    // - sinon, rotation "classique" (CG ou autres positions).
+    let theta;
 
-    raw.push({ t, xCG, yCG, xP, yP, theta, isCG });
+    if (pointPosSelect.value === "end") {
+      // vecteur CG -> point rouge
+      const dxE = xP - xCG;
+      const dyE = yP - yCG;
+      // angle du manche tel que l'extrémité (x = +L(1-cgOffset)) arrive au point rouge
+      theta = Math.atan2(dyE, dxE) - Math.atan2(0, (1 - cgOffset) * hammer.handleLength);
+    } else {
+      const baseOmegaCG = 0.25;
+      const baseOmegaOther = 1.5;
+      const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
+      const omega = baseOmega * (rotFactor / 10);
+      theta = omega * t;
+    }
+
+    raw.push({ t, xCG, yCG, xP, yP, theta });
     t += dt;
   }
 
   if (raw.length === 0) return null;
 
-  // cadrage sur la trajectoire du CG
+  // cadrage sur le CG
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -305,8 +321,6 @@ btnQuitter.addEventListener("click", () => {
   window.location.reload();
 });
 
-// mise à jour du point rouge sur la page principale
-pointPosSelect.addEventListener("change", updatePointTFromSelect);
-
 // initialisation
+pointPosSelect.addEventListener("change", updatePointTFromSelect);
 updatePointTFromSelect();
