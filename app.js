@@ -204,6 +204,7 @@ function computeFullTrajectory() {
 
 // ---------- ANIMATION ----------
 function startAnimation() {
+  console.log("Position choisie:", pointPosSelect.value);
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
