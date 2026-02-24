@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (parabole + cycloïde + descente complète)");
+console.log("JS chargé (fix affichage marteau + bouton)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -28,18 +28,17 @@ const hammer = {
   headHeight: 120
 };
 
-// centre de gravité plus proche de la tête
-const cgOffset = 0.15;
+const cgOffset = 0.15; // centre de gravité proche de la tête
 
 // animation
 let animationId = null;
 let trajectoryData = null;
 let currentIndex = 0;
 
-// point rouge : t (0..1 sur le manche, <0 légèrement côté tête)
+// point rouge (0..1 sur le manche, <0 côté tête)
 let pointT = 1;
 
-// --- dessin marteau sur l'écran principal ---
+// ---------- DESSIN MARTEAU PAGE PRINCIPALE ----------
 function drawHammerScene() {
   hctx.clearRect(0, 0, hammerCanvas.width, hammerCanvas.height);
 
@@ -80,29 +79,25 @@ function drawHammerScene() {
   hctx.restore();
 }
 
-// mettre pointT selon le select
+// met pointT selon le select
 function updatePointTFromSelect() {
   const val = pointPosSelect.value;
   if (val === "cg") {
-    pointT = cgOffset;          // centre de gravité
+    pointT = cgOffset;
   } else if (val === "middle") {
-    pointT = 0.5;               // milieu du manche
+    pointT = 0.5;
   } else if (val === "head") {
-    pointT = -0.15;             // sur la tête
+    pointT = -0.15;
   } else {
-    pointT = 1.0;               // extrémité du manche
+    pointT = 1.0;
   }
   drawHammerScene();
 }
 
-// --- calcul de la trajectoire globale ---
-//  - CG suit une parabole complète (montée + descente).
-//  - si point = CG → trajectoire du point = parabole pure.
-//  - sinon → trajectoire du point = parabole CG + cycloïde autour du CG.
-
+// ---------- CALCUL TRAJECTOIRE (parabole CG + cycloïde éventuelle) ----------
 function computeFullTrajectory() {
-  const speed = parseFloat(speedSelect.value);        // 5 ou 10
-  const rotFactor = parseFloat(rotationSelect.value); // 1 ou 10
+  const speed = parseFloat(speedSelect.value);
+  const rotFactor = parseFloat(rotationSelect.value);
 
   const pivotX = hammer.x;
   const pivotY = hammer.y;
@@ -110,11 +105,10 @@ function computeFullTrajectory() {
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  // lancer vers le haut : angle 70°, vitesse réduite pour raccourcir la portée
   const launchAngle = Math.PI * 0.7;
-  const v0 = speed * 30;   // moins que précédemment
+  const v0 = speed * 30;
 
-  const dt = 0.06;         // pas de temps plus grand → moins de points
+  const dt = 0.06;
   const raw = [];
 
   let t = 0;
@@ -123,34 +117,25 @@ function computeFullTrajectory() {
     const yCG =
       cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.8 * t * t);
 
-    // on garde montée + sommet + descente
     if (yCG > cgY0 + 260) break;
 
     const isCG = Math.abs(pointT - cgOffset) < 0.001;
 
-    // trajectoire du point rouge
     let xP, yP;
 
     if (isCG) {
-      // CAS 1 : point = centre de gravité → trajectoire parabolique pure
+      // trajectoire parabolique pure
       xP = xCG;
       yP = yCG;
     } else {
-      // CAS 2 : point ≠ CG → cycloïde "par-dessus" la parabole
-      // rayon de la cycloïde proportionnel à la distance au CG
+      // cycloïde autour de la parabole
       const R = Math.abs(pointT - cgOffset) * hammer.handleLength;
-
-      // vitesse de "roulement" dépendant de rotFactor
       const vCycle = (5 + 10 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
+      const s = vCycle * t / (R || 1); // évite division par 0
 
-      // paramètre cycloïde
-      const s = vCycle * t / R; // ~angle du rouleau
-
-      // cycloïde standard : x = R(s - sin s), y = R(1 - cos s)
       const xCyc = R * (s - Math.sin(s));
       const yCyc = R * (1 - Math.cos(s));
 
-      // orientation globale du lancer : on projette la cycloïde
       const cosA = Math.cos(launchAngle - Math.PI / 2);
       const sinA = Math.sin(launchAngle - Math.PI / 2);
 
@@ -161,7 +146,6 @@ function computeFullTrajectory() {
       yP = yCG + dy;
     }
 
-    // orientation du marteau : légère rotation, plus forte si point ≠ CG
     const baseOmegaCG = 0.25;
     const baseOmegaOther = 1.5;
     const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
@@ -174,7 +158,7 @@ function computeFullTrajectory() {
 
   if (raw.length === 0) return null;
 
-  // cadrage : min/max sur la trajectoire du centre de gravité
+  // cadrage sur la trajectoire du CG
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -202,13 +186,10 @@ function computeFullTrajectory() {
     return { ...p, cgx, cgy, px, py, scale };
   });
 
-  return { points, margin, minX, minY, scale };
+  return { points };
 }
 
-// --- animation progressive ---
-let animationId = null;
-let currentIndex = 0;
-
+// ---------- ANIMATION ----------
 function startAnimation() {
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
@@ -236,12 +217,10 @@ function animateStep() {
     return;
   }
 
-  // fond
   tctx.clearRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  // on dessine une position sur 3 pour limiter la superposition
   const stepDraw = 3;
 
   for (let i = 0; i <= currentIndex; i += stepDraw) {
@@ -253,7 +232,7 @@ function animateStep() {
     const alphaHandle = 0.12 + 0.55 * progress;
     const alphaPointTrace = 0.15 + 0.5 * progress;
 
-    // tête grise
+    // tête
     tctx.save();
     tctx.translate(p.cgx, p.cgy);
     tctx.rotate(angle);
@@ -277,7 +256,7 @@ function animateStep() {
     tctx.fill();
     tctx.restore();
 
-    // manche jaune
+    // manche
     tctx.save();
     tctx.translate(p.cgx, p.cgy);
     tctx.rotate(angle);
@@ -290,14 +269,14 @@ function animateStep() {
     );
     tctx.restore();
 
-    // trace du point rouge
+    // trace point rouge
     tctx.beginPath();
     tctx.fillStyle = `rgba(255,0,0,${alphaPointTrace})`;
     tctx.arc(p.px, p.py, 3, 0, Math.PI * 2);
     tctx.fill();
   }
 
-  // point rouge courant au premier plan
+  // point rouge courant
   const pCur = points[currentIndex];
   tctx.beginPath();
   tctx.fillStyle = "rgba(255,0,0,1)";
@@ -308,7 +287,7 @@ function animateStep() {
   animationId = requestAnimationFrame(animateStep);
 }
 
-// --- navigation ---
+// ---------- NAVIGATION ----------
 btnTrajectoire.addEventListener("click", () => {
   trajectoryScreen.style.display = "flex";
   startAnimation();
@@ -326,10 +305,8 @@ btnQuitter.addEventListener("click", () => {
   window.location.reload();
 });
 
-// changement de position du point rouge
-pointPosSelect.addEventListener("change", () => {
-  updatePointTFromSelect();
-});
+// mise à jour du point rouge sur la page principale
+pointPosSelect.addEventListener("change", updatePointTFromSelect);
 
 // initialisation
 updatePointTFromSelect();
