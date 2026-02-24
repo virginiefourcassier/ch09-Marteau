@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (parabole + boucles)");
+console.log("JS chargé (parabole + cycloïde + descente complète)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -86,9 +86,9 @@ function updatePointTFromSelect() {
   if (val === "cg") {
     pointT = cgOffset;          // centre de gravité
   } else if (val === "middle") {
-    pointT = 0.5;               // milieu du manche bien au centre
+    pointT = 0.5;               // milieu du manche
   } else if (val === "head") {
-    pointT = -0.15;             // sur la tête, un peu avant le pivot
+    pointT = -0.15;             // sur la tête
   } else {
     pointT = 1.0;               // extrémité du manche
   }
@@ -97,10 +97,11 @@ function updatePointTFromSelect() {
 
 // --- calcul de la trajectoire globale ---
 //  - CG suit une parabole complète (montée + descente).
-//  - Point rouge = CG + rotation (faible si CG, forte sinon).
+//  - si point = CG → trajectoire du point = parabole pure.
+//  - sinon → trajectoire du point = parabole CG + cycloïde autour du CG.
 
 function computeFullTrajectory() {
-  const speed = parseFloat(speedSelect.value);      // 5 ou 10
+  const speed = parseFloat(speedSelect.value);        // 5 ou 10
   const rotFactor = parseFloat(rotationSelect.value); // 1 ou 10
 
   const pivotX = hammer.x;
@@ -109,53 +110,71 @@ function computeFullTrajectory() {
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  // lancer vers le haut : angle 70°
+  // lancer vers le haut : angle 70°, vitesse réduite pour raccourcir la portée
   const launchAngle = Math.PI * 0.7;
-  const v0 = speed * 38;
+  const v0 = speed * 30;   // moins que précédemment
 
-  const dt = 0.05; // moins de points -> traces moins denses
+  const dt = 0.06;         // pas de temps plus grand → moins de points
   const raw = [];
 
   let t = 0;
   while (t < 7) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
-      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 2.0 * t * t);
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.8 * t * t);
 
-    // on garde montée + sommet + descente plus longue
-    if (yCG > cgY0 + 280) break;
+    // on garde montée + sommet + descente
+    if (yCG > cgY0 + 260) break;
 
-    // rotation :
-    // - si point au CG : rotation douce
-    // - sinon : rotation plus forte → boucles
-    const baseOmegaCG = 0.35;
-    const baseOmegaOther = 1.8;
     const isCG = Math.abs(pointT - cgOffset) < 0.001;
+
+    // trajectoire du point rouge
+    let xP, yP;
+
+    if (isCG) {
+      // CAS 1 : point = centre de gravité → trajectoire parabolique pure
+      xP = xCG;
+      yP = yCG;
+    } else {
+      // CAS 2 : point ≠ CG → cycloïde "par-dessus" la parabole
+      // rayon de la cycloïde proportionnel à la distance au CG
+      const R = Math.abs(pointT - cgOffset) * hammer.handleLength;
+
+      // vitesse de "roulement" dépendant de rotFactor
+      const vCycle = (5 + 10 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
+
+      // paramètre cycloïde
+      const s = vCycle * t / R; // ~angle du rouleau
+
+      // cycloïde standard : x = R(s - sin s), y = R(1 - cos s)
+      const xCyc = R * (s - Math.sin(s));
+      const yCyc = R * (1 - Math.cos(s));
+
+      // orientation globale du lancer : on projette la cycloïde
+      const cosA = Math.cos(launchAngle - Math.PI / 2);
+      const sinA = Math.sin(launchAngle - Math.PI / 2);
+
+      const dx = xCyc * cosA - yCyc * sinA;
+      const dy = xCyc * sinA + yCyc * cosA;
+
+      xP = xCG + dx;
+      yP = yCG + dy;
+    }
+
+    // orientation du marteau : légère rotation, plus forte si point ≠ CG
+    const baseOmegaCG = 0.25;
+    const baseOmegaOther = 1.5;
     const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
     const omega = baseOmega * (rotFactor / 10);
-
     const theta = omega * t;
 
-    // point rouge en coordonnées marteau (distance au CG)
-    const dxLocal = (pointT - cgOffset) * hammer.handleLength;
-    const dyLocal = 0;
-
-    const cosTh = Math.cos(theta);
-    const sinTh = Math.sin(theta);
-
-    const dxP = dxLocal * cosTh - dyLocal * sinTh;
-    const dyP = dxLocal * sinTh + dyLocal * cosTh;
-
-    const xP = xCG + dxP;
-    const yP = yCG + dyP;
-
-    raw.push({ t, xCG, yCG, xP, yP, theta });
+    raw.push({ t, xCG, yCG, xP, yP, theta, isCG });
     t += dt;
   }
 
   if (raw.length === 0) return null;
 
-  // cadrage : on utilise min/max de toute la trajectoire
+  // cadrage : min/max sur la trajectoire du centre de gravité
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -187,6 +206,9 @@ function computeFullTrajectory() {
 }
 
 // --- animation progressive ---
+let animationId = null;
+let currentIndex = 0;
+
 function startAnimation() {
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
@@ -219,7 +241,7 @@ function animateStep() {
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  // on ne dessine qu'une position sur 3 pour limiter la superposition
+  // on dessine une position sur 3 pour limiter la superposition
   const stepDraw = 3;
 
   for (let i = 0; i <= currentIndex; i += stepDraw) {
@@ -271,7 +293,7 @@ function animateStep() {
     // trace du point rouge
     tctx.beginPath();
     tctx.fillStyle = `rgba(255,0,0,${alphaPointTrace})`;
-    tctx.arc(p.cgx, p.cgy, 3, 0, Math.PI * 2);
+    tctx.arc(p.px, p.py, 3, 0, Math.PI * 2);
     tctx.fill();
   }
 
@@ -279,7 +301,7 @@ function animateStep() {
   const pCur = points[currentIndex];
   tctx.beginPath();
   tctx.fillStyle = "rgba(255,0,0,1)";
-  tctx.arc(pCur.cgx, pCur.cgy, 5, 0, Math.PI * 2);
+  tctx.arc(pCur.px, pCur.py, 5, 0, Math.PI * 2);
   tctx.fill();
 
   currentIndex++;
