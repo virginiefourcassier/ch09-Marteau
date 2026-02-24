@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (extrémité = cycloïde cohérente)");
+console.log("JS chargé (cg = parabole, extrémité = cycloïde)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -83,13 +83,11 @@ function drawHammerScene() {
 function updatePointTFromSelect() {
   const val = pointPosSelect.value;
   if (val === "cg") {
-    pointT = cgOffset;
+    pointT = cgOffset;      // centre de gravité
   } else if (val === "middle") {
-    pointT = 0.5;
-  } else if (val === "head") {
-    pointT = -0.15;
+    pointT = 0.5;           // milieu du manche
   } else {
-    // extrémité du manche
+    // "end" : extrémité du manche
     pointT = 1.0;
   }
   drawHammerScene();
@@ -106,7 +104,7 @@ function computeFullTrajectory() {
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  const launchAngle = Math.PI * 0.7;
+  const launchAngle = Math.PI * 0.7; // lancer vers le haut (~70°)
   const v0 = speed * 30;
 
   const dt = 0.06;
@@ -114,30 +112,31 @@ function computeFullTrajectory() {
   let t = 0;
 
   while (t < 7) {
+    // trajectoire parabolique du centre de gravité
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
       cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.8 * t * t);
 
-    if (yCG > cgY0 + 260) break;
+    if (yCG > cgY0 + 260) break; // on arrête après la descente
 
     const isCG = Math.abs(pointT - cgOffset) < 0.001;
-
-    // position du point rouge
     let xP, yP;
 
     if (isCG) {
-      // parabole pure
+      // CAS 1 : point rouge = centre de gravité → parabole pure
       xP = xCG;
       yP = yCG;
     } else {
-      // cycloïde autour de la parabole
+      // CAS 2 : point ≠ CG → cycloïde autour de la parabole
       const R = Math.abs(pointT - cgOffset) * hammer.handleLength || 1;
       const vCycle = (5 + 10 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
       const s = vCycle * t / R;
 
+      // cycloïde standard
       const xCyc = R * (s - Math.sin(s));
       const yCyc = R * (1 - Math.cos(s));
 
+      // on oriente la cycloïde dans le plan selon l'angle de tir
       const cosA = Math.cos(launchAngle - Math.PI / 2);
       const sinA = Math.sin(launchAngle - Math.PI / 2);
 
@@ -149,20 +148,18 @@ function computeFullTrajectory() {
     }
 
     // orientation du marteau :
-    // - si point = extrémité du manche, on oriente le manche pour que
-    //   l'extrémité coïncide avec le point rouge (cycloïde).
-    // - sinon, rotation "classique" (CG ou autres positions).
+    // - si point = extrémité, on impose que l'extrémité du manche soit ce point
+    // - sinon, rotation "décorative" plus faible
     let theta;
-
     if (pointPosSelect.value === "end") {
-      // vecteur CG -> point rouge
       const dxE = xP - xCG;
       const dyE = yP - yCG;
-      // angle du manche tel que l'extrémité (x = +L(1-cgOffset)) arrive au point rouge
-      theta = Math.atan2(dyE, dxE) - Math.atan2(0, (1 - cgOffset) * hammer.handleLength);
+      // l'extrémité du manche est à (1-cgOffset)*L à droite du CG
+      const refX = (1 - cgOffset) * hammer.handleLength;
+      theta = Math.atan2(dyE, dxE) - Math.atan2(0, refX);
     } else {
       const baseOmegaCG = 0.25;
-      const baseOmegaOther = 1.5;
+      const baseOmegaOther = 1.2;
       const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
       const omega = baseOmega * (rotFactor / 10);
       theta = omega * t;
@@ -321,6 +318,7 @@ btnQuitter.addEventListener("click", () => {
   window.location.reload();
 });
 
-// initialisation
 pointPosSelect.addEventListener("change", updatePointTFromSelect);
+
+// initialisation
 updatePointTFromSelect();
