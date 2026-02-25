@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (cg = parabole, extrémité = cycloïde)");
+console.log("JS chargé (version corrigée finale)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -28,7 +28,7 @@ const hammer = {
   headHeight: 120
 };
 
-// centre de gravité proche de la tête
+// centre de gravité (0 = pivot, 1 = extrémité manche)
 const cgOffset = 0.15;
 
 // animation
@@ -36,10 +36,10 @@ let animationId = null;
 let trajectoryData = null;
 let currentIndex = 0;
 
-// t du point rouge sur le manche
+// point rouge sur le manche
 let pointT = 1;
 
-// ---------- DESSIN MARTEAU PAGE PRINCIPALE ----------
+// --------- DESSIN MARTEAU PAGE PRINCIPALE ----------
 function drawHammerScene() {
   hctx.clearRect(0, 0, hammerCanvas.width, hammerCanvas.height);
 
@@ -83,17 +83,17 @@ function drawHammerScene() {
 function updatePointTFromSelect() {
   const val = pointPosSelect.value;
   if (val === "cg") {
-    pointT = cgOffset;      // centre de gravité
+    pointT = cgOffset;
   } else if (val === "middle") {
-    pointT = 0.5;           // milieu du manche
+    pointT = 0.5;
   } else {
-    // "end" : extrémité du manche
+    // "end"
     pointT = 1.0;
   }
   drawHammerScene();
 }
 
-// ---------- CALCUL TRAJECTOIRE ----------
+// --------- CALCUL TRAJECTOIRE (CG + cycloïde éventuelle) ----------
 function computeFullTrajectory() {
   const speed = parseFloat(speedSelect.value);
   const rotFactor = parseFloat(rotationSelect.value);
@@ -104,39 +104,39 @@ function computeFullTrajectory() {
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  const launchAngle = Math.PI * 0.7; // lancer vers le haut (~70°)
-  const v0 = speed * 30;
+  const launchAngle = Math.PI * 0.7; // ~70°
+  const v0 = speed * 30;             // portée raisonnable
 
   const dt = 0.06;
   const raw = [];
   let t = 0;
 
+  const posMode = pointPosSelect.value; // "cg" | "middle" | "end"
+
   while (t < 7) {
-    // trajectoire parabolique du centre de gravité
+    // trajectoire parabolique du CG
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
       cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.8 * t * t);
 
-    if (yCG > cgY0 + 260) break; // on arrête après la descente
+    if (yCG > cgY0 + 260) break; // fin de la descente
 
-    const isCG = Math.abs(pointT - cgOffset) < 0.001;
     let xP, yP;
 
-    if (isCG) {
-      // CAS 1 : point rouge = centre de gravité → parabole pure
+    if (posMode === "cg") {
+      // CAS 1 : point = centre de gravité → parabole pure
       xP = xCG;
       yP = yCG;
     } else {
       // CAS 2 : point ≠ CG → cycloïde autour de la parabole
       const R = Math.abs(pointT - cgOffset) * hammer.handleLength || 1;
-      const vCycle = (5 + 10 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
+      const vCycle =
+        (6 + 14 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
       const s = vCycle * t / R;
 
-      // cycloïde standard
       const xCyc = R * (s - Math.sin(s));
       const yCyc = R * (1 - Math.cos(s));
 
-      // on oriente la cycloïde dans le plan selon l'angle de tir
       const cosA = Math.cos(launchAngle - Math.PI / 2);
       const sinA = Math.sin(launchAngle - Math.PI / 2);
 
@@ -147,21 +147,20 @@ function computeFullTrajectory() {
       yP = yCG + dy;
     }
 
-    // orientation du marteau :
-    // - si point = extrémité, on impose que l'extrémité du manche soit ce point
-    // - sinon, rotation "décorative" plus faible
+    // orientation du marteau
     let theta;
-    if (pointPosSelect.value === "end") {
+    if (posMode === "end") {
+      // on impose que l'extrémité du manche coïncide avec (xP,yP)
       const dxE = xP - xCG;
       const dyE = yP - yCG;
-      // l'extrémité du manche est à (1-cgOffset)*L à droite du CG
-      const refX = (1 - cgOffset) * hammer.handleLength;
+      const refX = (1 - cgOffset) * hammer.handleLength; // vecteur CG→extrémité dans la base
       theta = Math.atan2(dyE, dxE) - Math.atan2(0, refX);
     } else {
-      const baseOmegaCG = 0.25;
-      const baseOmegaOther = 1.2;
-      const baseOmega = isCG ? baseOmegaCG : baseOmegaOther;
-      const omega = baseOmega * (rotFactor / 10);
+      // rotation "libre" (faible pour CG, plus forte pour middle)
+      const baseOmegaCG = 0.3;
+      const baseOmegaMid = 1.2;
+      const baseOmega = posMode === "cg" ? baseOmegaCG : baseOmegaMid;
+      const omega = baseOmega * (rotFactor / 10); // rotFactor = 1 ou 10
       theta = omega * t;
     }
 
@@ -171,7 +170,7 @@ function computeFullTrajectory() {
 
   if (raw.length === 0) return null;
 
-  // cadrage sur le CG
+  // cadrage sur la trajectoire du CG
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -202,9 +201,8 @@ function computeFullTrajectory() {
   return { points };
 }
 
-// ---------- ANIMATION ----------
+// --------- ANIMATION ----------
 function startAnimation() {
-  console.log("Position choisie:", pointPosSelect.value);
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -235,7 +233,7 @@ function animateStep() {
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  const stepDraw = 3;
+  const stepDraw = 3; // moins de traces superposées
 
   for (let i = 0; i <= currentIndex; i += stepDraw) {
     const p = points[i];
@@ -246,7 +244,7 @@ function animateStep() {
     const alphaHandle = 0.12 + 0.55 * progress;
     const alphaPointTrace = 0.15 + 0.5 * progress;
 
-    // tête
+    // tête grise
     tctx.save();
     tctx.translate(p.cgx, p.cgy);
     tctx.rotate(angle);
@@ -270,7 +268,7 @@ function animateStep() {
     tctx.fill();
     tctx.restore();
 
-    // manche
+    // manche jaune
     tctx.save();
     tctx.translate(p.cgx, p.cgy);
     tctx.rotate(angle);
@@ -283,7 +281,7 @@ function animateStep() {
     );
     tctx.restore();
 
-    // trace point rouge
+    // trace du point rouge
     tctx.beginPath();
     tctx.fillStyle = `rgba(255,0,0,${alphaPointTrace})`;
     tctx.arc(p.px, p.py, 3, 0, Math.PI * 2);
@@ -301,7 +299,7 @@ function animateStep() {
   animationId = requestAnimationFrame(animateStep);
 }
 
-// ---------- NAVIGATION ----------
+// --------- NAVIGATION ----------
 btnTrajectoire.addEventListener("click", () => {
   trajectoryScreen.style.display = "flex";
   startAnimation();
