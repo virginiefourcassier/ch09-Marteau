@@ -104,31 +104,37 @@ h1 {
   border-radius: 20px;
 }
 
-/* Écran trajectoire */
+/* Écran trajectoire plein écran */
 #trajectoryScreen {
   position: fixed;
   inset: 0;
   background: #66a3ff;
-  display: none;            /* corrigé : caché par défaut */
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 20px;
+  z-index: 9999;
 }
 
 #trajectoryCanvas {
   background: #66a3ff;
+  display: block;
 }
 
 .back-button {
+  display: inline-block !important;
   padding: 10px 30px;
   font-size: 1.2rem;
   border-radius: 20px;
   border: 2px solid #444;
   background: #eeeeee;
   cursor: pointer;
+  position: relative;
+  z-index: 10000;
 }
 
+/* utilitaire : cache vraiment l'élément */
 .hidden {
-  display: none;
+  display: none !important;
 }

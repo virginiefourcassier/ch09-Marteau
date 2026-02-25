@@ -1,5 +1,5 @@
 const g = 9.81;
-console.log("JS chargé (version corrigée finale)");
+console.log("JS chargé (version découpée CG / cycloïde)");
 
 // canvas marteau
 const hammerCanvas = document.getElementById("hammerCanvas");
@@ -93,84 +93,46 @@ function updatePointTFromSelect() {
   drawHammerScene();
 }
 
-// --------- CALCUL TRAJECTOIRE (CG + cycloïde éventuelle) ----------
-function computeFullTrajectory() {
+// --------- CALCUL TRAJECTOIRE : CAS CENTRE DE GRAVITÉ ----------
+function computeTrajectoryCG() {
   const speed = parseFloat(speedSelect.value);
   const rotFactor = parseFloat(rotationSelect.value);
 
   const pivotX = hammer.x;
   const pivotY = hammer.y;
-
   const cgX0 = pivotX + cgOffset * hammer.handleLength;
   const cgY0 = pivotY;
 
-  const launchAngle = Math.PI * 0.7; // ~70°
-  const v0 = speed * 30;             // portée raisonnable
+  const launchAngle = Math.PI * 0.7;
+  const v0 = speed * 30;
 
-  const dt = 0.06;
+  const v0y = v0 * Math.sin(launchAngle);
+  const timeOfFlight = (2 * v0y) / (g * 1.1);
+
+  // peu de points → parabole propre
+  const dt = timeOfFlight / 80;
   const raw = [];
   let t = 0;
 
-  const posMode = pointPosSelect.value; // "cg" | "middle" | "end"
+  const omegaBase = 1.6;
+  const omega = (rotFactor / 10) * omegaBase;
 
-  while (t < 7) {
-    // trajectoire parabolique du CG
+  while (t <= timeOfFlight) {
     const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
     const yCG =
-      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.8 * t * t);
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.1 * t * t);
 
-    if (yCG > cgY0 + 260) break; // fin de la descente
+    const theta = omega * t;
 
-    let xP, yP;
-
-    if (posMode === "cg") {
-      // CAS 1 : point = centre de gravité → parabole pure
-      xP = xCG;
-      yP = yCG;
-    } else {
-      // CAS 2 : point ≠ CG → cycloïde autour de la parabole
-      const R = Math.abs(pointT - cgOffset) * hammer.handleLength || 1;
-      const vCycle =
-        (6 + 14 * (rotFactor / 10)) * (pointT > cgOffset ? 1 : -1);
-      const s = vCycle * t / R;
-
-      const xCyc = R * (s - Math.sin(s));
-      const yCyc = R * (1 - Math.cos(s));
-
-      const cosA = Math.cos(launchAngle - Math.PI / 2);
-      const sinA = Math.sin(launchAngle - Math.PI / 2);
-
-      const dx = xCyc * cosA - yCyc * sinA;
-      const dy = xCyc * sinA + yCyc * cosA;
-
-      xP = xCG + dx;
-      yP = yCG + dy;
-    }
-
-    // orientation du marteau
-    let theta;
-    if (posMode === "end") {
-      // on impose que l'extrémité du manche coïncide avec (xP,yP)
-      const dxE = xP - xCG;
-      const dyE = yP - yCG;
-      const refX = (1 - cgOffset) * hammer.handleLength; // vecteur CG→extrémité dans la base
-      theta = Math.atan2(dyE, dxE) - Math.atan2(0, refX);
-    } else {
-      // rotation "libre" (faible pour CG, plus forte pour middle)
-      const baseOmegaCG = 0.3;
-      const baseOmegaMid = 1.2;
-      const baseOmega = posMode === "cg" ? baseOmegaCG : baseOmegaMid;
-      const omega = baseOmega * (rotFactor / 10); // rotFactor = 1 ou 10
-      theta = omega * t;
-    }
+    const xP = xCG;
+    const yP = yCG;
 
     raw.push({ t, xCG, yCG, xP, yP, theta });
     t += dt;
   }
 
-  if (raw.length === 0) return null;
+  if (!raw.length) return null;
 
-  // cadrage sur la trajectoire du CG
   let minX = raw[0].xCG;
   let maxX = raw[0].xCG;
   let minY = raw[0].yCG;
@@ -190,18 +152,108 @@ function computeFullTrajectory() {
   const scaleY = (trajectoryCanvas.height - 2 * margin) / heightWorld;
   const scale = Math.min(scaleX, scaleY);
 
-  const points = raw.map((p) => {
+  return raw.map((p) => {
+    const cgx = margin + (p.xCG - minX) * scale;
+    const cgy = margin + (p.yCG - minY) * scale;
+    const px = cgx;
+    const py = cgy;
+    return { ...p, cgx, cgy, px, py };
+  });
+}
+
+// --------- CALCUL TRAJECTOIRE : CAS CYCLOÏDE (MILIEU / EXTRÉMITÉ) ----------
+function computeTrajectoryCycloid() {
+  const speed = parseFloat(speedSelect.value);
+  const rotFactor = parseFloat(rotationSelect.value);
+
+  const pivotX = hammer.x;
+  const pivotY = hammer.y;
+  const cgX0 = pivotX + cgOffset * hammer.handleLength;
+  const cgY0 = pivotY;
+
+  const launchAngle = Math.PI * 0.7;
+  const v0 = speed * 30;
+
+  const v0y = v0 * Math.sin(launchAngle);
+  const timeOfFlight = (2 * v0y) / (g * 1.1);
+
+  // PLUS DE POINTS pour une cycloïde plus fine
+  const dt = timeOfFlight / 220; // ← augmenté (avant : /140)
+  const raw = [];
+  let t = 0;
+
+  const L = (pointT - cgOffset) * hammer.handleLength;
+
+  const omegaBase = 2.4;
+  const omega = (rotFactor / 10) * omegaBase;
+
+  while (t <= timeOfFlight) {
+    const xCG = cgX0 + v0 * Math.cos(launchAngle) * t;
+    const yCG =
+      cgY0 - (v0 * Math.sin(launchAngle) * t - 0.5 * g * 1.1 * t * t);
+
+    const theta = omega * t;
+
+    const dirX = Math.cos(launchAngle);
+    const dirY = -Math.sin(launchAngle);
+
+    const vx0 = L * dirX;
+    const vy0 = L * dirY;
+
+    const cosR = Math.cos(theta);
+    const sinR = Math.sin(theta);
+    const vx = vx0 * cosR - vy0 * sinR;
+    const vy = vx0 * sinR + vy0 * cosR;
+
+    const xP = xCG + vx;
+    const yP = yCG + vy;
+
+    raw.push({ t, xCG, yCG, xP, yP, theta });
+    t += dt;
+  }
+
+  if (!raw.length) return null;
+
+  let minX = raw[0].xCG;
+  let maxX = raw[0].xCG;
+  let minY = raw[0].yCG;
+  let maxY = raw[0].yCG;
+
+  for (const p of raw) {
+    if (p.xCG < minX) minX = p.xCG;
+    if (p.xCG > maxX) maxX = p.xCG;
+    if (p.yCG < minY) minY = p.yCG;
+    if (p.yCG > maxY) maxY = p.yCG;
+  }
+
+  const margin = 70;
+  const widthWorld = maxX - minX || 1;
+  const heightWorld = maxY - minY || 1;
+  const scaleX = (trajectoryCanvas.width - 2 * margin) / widthWorld;
+  const scaleY = (trajectoryCanvas.height - 2 * margin) / heightWorld;
+  const scale = Math.min(scaleX, scaleY);
+
+  return raw.map((p) => {
     const cgx = margin + (p.xCG - minX) * scale;
     const cgy = margin + (p.yCG - minY) * scale;
     const px = margin + (p.xP - minX) * scale;
     const py = margin + (p.yP - minY) * scale;
-    return { ...p, cgx, cgy, px, py, scale };
+    return { ...p, cgx, cgy, px, py };
   });
-
-  return { points };
 }
 
-// --------- ANIMATION ----------
+// --------- DISPATCH CALCUL SELON POSITION ----------
+function computeFullTrajectory() {
+  if (Math.abs(pointT - cgOffset) < 1e-3) {
+    const pts = computeTrajectoryCG();
+    return pts ? { points: pts } : null;
+  } else {
+    const pts = computeTrajectoryCycloid();
+    return pts ? { points: pts } : null;
+  }
+}
+
+// --------- ANIMATION (manche + tête visibles) ----------
 function startAnimation() {
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
@@ -233,62 +285,93 @@ function animateStep() {
   tctx.fillStyle = "#66a3ff";
   tctx.fillRect(0, 0, trajectoryCanvas.width, trajectoryCanvas.height);
 
-  const stepDraw = 3; // moins de traces superposées
+  const isCG = Math.abs(pointT - cgOffset) < 1e-3;
+  // densité encore augmentée pour cycloïde
+  const stepDraw = isCG ? 4 : 3; // ← avant : 4 et 6
 
   for (let i = 0; i <= currentIndex; i += stepDraw) {
     const p = points[i];
     const progress = i / (n - 1);
-    const angle = p.theta;
 
-    const alphaGhost = 0.04 + 0.22 * progress;
-    const alphaHandle = 0.12 + 0.55 * progress;
+    const alphaGhost = 0.05 + 0.25 * progress;
+    const alphaHandle = 0.15 + 0.55 * progress;
     const alphaPointTrace = 0.15 + 0.5 * progress;
 
-    // tête grise
-    tctx.save();
-    tctx.translate(p.cgx, p.cgy);
-    tctx.rotate(angle);
+    const Ltot = hammer.handleLength;
+    const Lavant = pointT * Ltot;
+    const Lapres = Ltot - Lavant;
+
+    const theta = p.theta;
+    const dirX0 = Math.cos(Math.PI * 0.7);
+    const dirY0 = -Math.sin(Math.PI * 0.7);
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+    const ux = dirX0 * cosT - dirY0 * sinT;
+    const uy = dirX0 * sinT + dirY0 * cosT;
+
+    const pointRedX = p.px;
+    const pointRedY = p.py;
+
+    const pivotX = pointRedX - ux * Lavant;
+    const pivotY = pointRedY - uy * Lavant;
+
+    const endX = pointRedX + ux * Lapres;
+    const endY = pointRedY + uy * Lapres;
+
+    // manche
+    tctx.strokeStyle = `rgba(255,204,51,${alphaHandle})`;
+    tctx.lineWidth = hammer.handleThickness * 0.9;
+    tctx.lineCap = "round";
+    tctx.beginPath();
+    tctx.moveTo(pivotX, pivotY);
+    tctx.lineTo(endX, endY);
+    tctx.stroke();
+
+    // tête
+    const headW = hammer.headWidth;
+    const headH = hammer.headHeight;
+
+    const nx = -uy;
+    const ny = ux;
+
+    const A = {
+      x: pivotX - ux * headW,
+      y: pivotY - uy * headW
+    };
+    const B = {
+      x: pivotX,
+      y: pivotY - ny * headH * 0.45
+    };
+    const C = {
+      x: pivotX,
+      y: pivotY + ny * headH * 0.45
+    };
+    const D = {
+      x: pivotX - ux * headW * 0.6,
+      y: pivotY + ny * headH * 0.25
+    };
+    const E = {
+      x: pivotX - ux * headW,
+      y: pivotY + ny * headH * 0.45
+    };
+
     tctx.fillStyle = `rgba(150,150,150,${alphaGhost})`;
     tctx.beginPath();
-    tctx.moveTo(
-      -cgOffset * hammer.handleLength - hammer.headWidth,
-      -hammer.headHeight * 0.45
-    );
-    tctx.lineTo(-cgOffset * hammer.handleLength, -hammer.headHeight * 0.45);
-    tctx.lineTo(-cgOffset * hammer.handleLength, hammer.headHeight * 0.45);
-    tctx.lineTo(
-      -cgOffset * hammer.handleLength - hammer.headWidth * 0.6,
-      hammer.headHeight * 0.25
-    );
-    tctx.lineTo(
-      -cgOffset * hammer.handleLength - hammer.headWidth,
-      hammer.headHeight * 0.45
-    );
+    tctx.moveTo(A.x, A.y);
+    tctx.lineTo(B.x, B.y);
+    tctx.lineTo(C.x, C.y);
+    tctx.lineTo(D.x, D.y);
+    tctx.lineTo(E.x, E.y);
     tctx.closePath();
     tctx.fill();
-    tctx.restore();
 
-    // manche jaune
-    tctx.save();
-    tctx.translate(p.cgx, p.cgy);
-    tctx.rotate(angle);
-    tctx.fillStyle = `rgba(255,204,51,${alphaHandle})`;
-    tctx.fillRect(
-      -cgOffset * hammer.handleLength,
-      -hammer.handleThickness / 2,
-      hammer.handleLength,
-      hammer.handleThickness
-    );
-    tctx.restore();
-
-    // trace du point rouge
+    // point rouge
     tctx.beginPath();
     tctx.fillStyle = `rgba(255,0,0,${alphaPointTrace})`;
-    tctx.arc(p.px, p.py, 3, 0, Math.PI * 2);
+    tctx.arc(pointRedX, pointRedY, 3, 0, Math.PI * 2);
     tctx.fill();
   }
 
-  // point rouge courant
   const pCur = points[currentIndex];
   tctx.beginPath();
   tctx.fillStyle = "rgba(255,0,0,1)";
@@ -301,12 +384,12 @@ function animateStep() {
 
 // --------- NAVIGATION ----------
 btnTrajectoire.addEventListener("click", () => {
-  trajectoryScreen.style.display = "flex";
+  trajectoryScreen.classList.remove("hidden");
   startAnimation();
 });
 
 btnRetour.addEventListener("click", () => {
-  trajectoryScreen.style.display = "none";
+  trajectoryScreen.classList.add("hidden");
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
@@ -320,4 +403,5 @@ btnQuitter.addEventListener("click", () => {
 pointPosSelect.addEventListener("change", updatePointTFromSelect);
 
 // initialisation
+trajectoryScreen.classList.add("hidden");
 updatePointTFromSelect();
