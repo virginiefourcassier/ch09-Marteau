@@ -2,19 +2,25 @@ body {
   margin: 0;
   font-family: "Trebuchet MS", Arial, sans-serif;
   background: #66a3ff;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 #app {
-  max-width: 1024px;
-  margin: 0 auto;
-  padding-top: 10px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 10px 10px 0 10px;
 }
 
 h1 {
   text-align: center;
   color: #ff3333;
   font-size: 2.4rem;
-  margin-bottom: 10px;
+  margin: 0 0 10px 0;
 }
 
 .main-layout {
@@ -24,7 +30,8 @@ h1 {
   padding: 10px;
   background: linear-gradient(#000000, #555555);
   border-radius: 20px;
-  margin: 0 10px;
+  margin: 0;
+  width: 100%;
 }
 
 .left-panel {
@@ -40,11 +47,16 @@ h1 {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 0;
 }
 
 #hammerCanvas {
   background: #33dd55;
   border-radius: 30px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
 }
 
 .right-panel {
@@ -94,7 +106,7 @@ h1 {
 }
 
 .bottom-panel {
-  margin: 10px;
+  margin: 10px 0;
   padding: 10px;
   text-align: center;
   font-size: 1.2rem;
@@ -115,11 +127,15 @@ h1 {
   justify-content: center;
   gap: 20px;
   z-index: 9999;
+  padding: 10px;
 }
 
 #trajectoryCanvas {
   background: #66a3ff;
   display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
 }
 
 .back-button {
@@ -137,4 +153,20 @@ h1 {
 /* utilitaire : cache vraiment l'élément */
 .hidden {
   display: none !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  .left-panel,
+  .right-panel {
+    font-size: 1rem;
+  }
 }
