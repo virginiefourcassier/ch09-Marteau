@@ -13,7 +13,7 @@ body {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 10px 10px 0 10px;
+  padding: 10px;
 }
 
 h1 {
@@ -30,7 +30,6 @@ h1 {
   padding: 10px;
   background: linear-gradient(#000000, #555555);
   border-radius: 20px;
-  margin: 0;
   width: 100%;
 }
 
@@ -53,10 +52,9 @@ h1 {
 #hammerCanvas {
   background: #33dd55;
   border-radius: 30px;
-  display: block;
   width: 100%;
-  max-width: 100%;
   height: auto;
+  display: block;
 }
 
 .right-panel {
@@ -117,6 +115,7 @@ h1 {
 }
 
 /* Écran trajectoire plein écran */
+
 #trajectoryScreen {
   position: fixed;
   inset: 0;
@@ -127,36 +126,42 @@ h1 {
   justify-content: center;
   gap: 20px;
   z-index: 9999;
-  padding: 10px;
+  padding: 20px;
 }
+
+/* canvas plein écran mais limité */
 
 #trajectoryCanvas {
   background: #66a3ff;
-  display: block;
-  width: 100%;
-  max-width: 100%;
+  width: 95%;
+  max-width: 1200px;
   height: auto;
+  display: block;
 }
 
+/* bouton retour toujours visible */
+
 .back-button {
-  display: inline-block !important;
-  padding: 10px 30px;
-  font-size: 1.2rem;
-  border-radius: 20px;
+  padding: 12px 40px;
+  font-size: 1.3rem;
+  border-radius: 25px;
   border: 2px solid #444;
   background: #eeeeee;
   cursor: pointer;
+  z-index: 10001;
   position: relative;
-  z-index: 10000;
 }
 
-/* utilitaire : cache vraiment l'élément */
+/* utilitaire */
+
 .hidden {
   display: none !important;
 }
 
-/* Responsive */
+/* responsive */
+
 @media (max-width: 900px) {
+
   .main-layout {
     grid-template-columns: 1fr;
   }
@@ -165,8 +170,4 @@ h1 {
     font-size: 2rem;
   }
 
-  .left-panel,
-  .right-panel {
-    font-size: 1rem;
-  }
 }
